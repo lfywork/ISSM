@@ -74,6 +74,8 @@ class ISSM(nn.Module):
 		# z_t
 		self.sigma = 0.5 * torch.ones(self.T, 1).float()
 		self.b = torch.zeros(self.T, 1).float()
+		self.sigma = torch.nn.Parameter(self.sigma)
+		self.g = torch.nn.Parameter(self.g)
 
 	# filtering
 	# stolen from https://gluon.mxnet.io/chapter12_time-series/issm-scratch.html#Filtering
@@ -89,7 +91,7 @@ class ISSM(nn.Module):
 		S_seq = []
 		log_p_seq = []
 		deltas = []
-		
+		total_loss = 0
 		for t in range(T):
 			if t == 0:
 				# At first time step, use mu_0, S_0 (prior)
@@ -116,7 +118,7 @@ class ISSM(nn.Module):
 			
 			sigma_t = sigma[t]
 			S_vv = torch.matmul(a_t.t(), sig_times_a) + sigma_t.pow(2)  # fourth eqn
-			kalman_gain = torch.div(sig_times_a, S_vv)  # fifth eqn
+			kalman_gain = torch.div(sig_times_a, S_vv+1e-8)  # fifth eqn
 			#print(kalman_gain.shape)
 			
 			# Prediction Error (delta)
@@ -132,17 +134,18 @@ class ISSM(nn.Module):
 					+ torch.mul(torch.matmul(kalman_gain, kalman_gain.t()), sigma_t.pow(2)) # seventh eqn
 			
 			# log likelihood
-			log_p = (-0.5 * (delta*delta / (S_vv + 1e-3)
+			log_p = (-0.5 * (delta*delta / (S_vv + 1e-8)
 							 + np.log(2.0*np.pi)
-							 + torch.log(S_vv + 1e-3))
+							 + torch.log(S_vv + 1e-8))
 					)
 			
 			mu_seq.append(mu_t)
 			S_seq.append(S_t)
 			log_p_seq.append(log_p)
 			deltas.append(delta)
+			total_loss += delta**2
 			
-		return mu_seq, S_seq, log_p_seq, deltas
+		return mu_seq, S_seq, log_p_seq, deltas, total_loss
 
 	def reconstruct(self, mu_seq, S_seq):
 		a_np = self.a.numpy()
@@ -201,14 +204,16 @@ class ISSM(nn.Module):
 
 
 	def forward(self, horizon=12):
-		mu_seq, S_seq, nlls, deltas = self.ISSM_filter(self.z, self.b, self.F, self.a, self.g, self.sigma, self.m_prior, self.S_prior)
-		reconst_mean, reconst_std = self.reconstruct(mu_seq, S_seq)
-		forecasts_mean, forecasts_std = self.forecast(mu_seq[-1],
-										  S_seq[-1],
-										  self.F, self.a, self.g, self.sigma, horizon=horizon)
+		mu_seq, S_seq, nlls, deltas, total_loss = self.ISSM_filter(self.z, self.b, self.F, self.a, self.g, self.sigma, self.m_prior, self.S_prior)
+		#print(deltas)
+		#reconst_mean, reconst_std = self.reconstruct(mu_seq, S_seq)
+		#forecasts_mean, forecasts_std = self.forecast(mu_seq[-1],
+										  #S_seq[-1],
+										  #self.F, self.a, self.g, self.sigma, horizon=horizon)
 		#self.plot_reconstruction_forecasts(reconst_mean, reconst_std, forecasts_mean, forecasts_std)
-		plt.plot(deltas)
-		plt.show()
+		#plt.plot(deltas)
+		#plt.show()
+		return total_loss
 
 
 
