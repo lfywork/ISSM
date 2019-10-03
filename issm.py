@@ -9,7 +9,7 @@ def load_args():
 
 	parser = argparse.ArgumentParser(description='params')
 	parser.add_argument('--model_type', default=1, type=int)
-	parser.add_argument('--horizon', default=10, type=int)
+	parser.add_argument('--horizon', default=8, type=int)
 	parser.add_argument('--epochs', default=50, type=int)
 
 	args = parser.parse_args()
@@ -24,8 +24,24 @@ def get_data(loc="https://datahub.io/core/bond-yields-us-10y/r/monthly.csv", hea
 
 	return ts
 
+def get_elecequip():
+	elecequip = pd.read_csv('elec.csv')
+	elecequip = elecequip.iloc[:, 1]
+
+	dates_index = pd.date_range('1996-01', periods=195, freq='M')
+	elecequip.index = dates_index
+	elecequip.name = 'elecequip'
+
+	# time-series
+	ts = elecequip.values[:-10]
+
+	# Normalize
+	ts = np.array((ts - np.mean(ts)) / np.std(ts), dtype=np.float)
+
+	return ts
+
 def train(args, issm):
-	optim = torch.optim.Adam(issm.parameters(), lr=1e-1)
+	optim = torch.optim.Adam(issm.parameters(), lr=1e-2)
 
 	for i in range(args.epochs):
 		#def closure():
@@ -38,17 +54,54 @@ def train(args, issm):
 
 		for name, param in issm.named_parameters():
 			if name == 'sigma':
-				param.data.clamp_(min=0)
+				param.data.clamp_(min=1e-5)
 			elif name == 'g':
-				param.data.clamp_(min=1e-5, max=0.99)
+				latent_dim = param.data.shape[0]
+				if latent_dim == 1:
+					# clamp alpha
+					param.data.clamp_(min=1e-5, max=0.999)
+				elif latent_dim >= 2:
+					# clamp alpha
+					param.data[0].clamp_(min=1e-5, max=0.999)
+					# clamp beta
+					param.data[1].clamp_(min=1e-5, max=0.999)
+				if latent_dim > 2:
+					# clamp gamma
+					param.data[2].clamp_(min=1e-5, max=0.999)
+					param.data[3:].clamp_(min=0., max=0.)
+			elif name == 'm_prior':
+				latent_dim = param.data.shape[0]
+				if latent_dim == 1:
+					# clamp level
+					param.data.clamp_(min=-2, max=2)
+				elif latent_dim >= 2:
+					# clamp level
+					param.data[0].clamp_(min=-2, max=2)
+					# clamp trend
+					param.data[1].clamp_(min=-2, max=2)
+				if latent_dim > 2:
+					# clamp seasonality
+					param.data[2:].clamp_(min=-2, max=2)
+					param.data[2:] = param.data[2:] - torch.mean(param.data[2:])
+				#param.data.clamp_(min=-2, max=2)
+			elif name == 'S_prior':
+				param.data = param.data * torch.eye(param.data.shape[0])
+				param.data.clamp_(min=1e-5)
+			elif name == 'b':
+				param.data.clamp_(min=-1, max=1)
 
-	for name, param in issm.named_parameters():
-		print(name, param.data)
+	# for name, param in issm.named_parameters():
+	# 	print(name, param.data)
 
 def main(args):
-	y = get_data()
+	#y = get_data()
+	y = get_elecequip()
 	issm = ISSM(y, model_type=args.model_type)
 	train(args, issm)
+	with torch.no_grad():
+		#print(issm.m_prior)
+		#print(torch.sum(issm.m_prior))
+		issm.generate(horizon=args.horizon)
 	#issm.forward(horizon=args.horizon)
 
 

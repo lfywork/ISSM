@@ -7,7 +7,7 @@ import seaborn as sns
 plt.rcParams['figure.figsize'] = (10, 6)
 sns.set()
 
-from pandas.plotting import register_matplotlib_converters
+from pandas.plotting import register_matplotlib_converters, autocorrelation_plot
 register_matplotlib_converters()
 
 
@@ -66,7 +66,7 @@ class ISSM(nn.Module):
 		# priors for latent space vector
 		# mean and variance for each dimension
 		self.m_prior = torch.zeros(self.latent_dim, 1)  # mu_prior = 0
-		sigma_prior = 1e2*torch.ones(self.latent_dim)
+		sigma_prior = 0.5*torch.ones(self.latent_dim)
 		self.S_prior = torch.diag(sigma_prior)
 
 		# sigma_t
@@ -74,8 +74,12 @@ class ISSM(nn.Module):
 		# z_t
 		self.sigma = 0.5 * torch.ones(self.T, 1).float()
 		self.b = torch.zeros(self.T, 1).float()
+
 		self.sigma = torch.nn.Parameter(self.sigma)
 		self.g = torch.nn.Parameter(self.g)
+		self.m_prior = torch.nn.Parameter(self.m_prior)
+		self.S_prior = torch.nn.Parameter(self.S_prior)
+		self.b = torch.nn.Parameter(self.b)
 
 	# filtering
 	# stolen from https://gluon.mxnet.io/chapter12_time-series/issm-scratch.html#Filtering
@@ -140,7 +144,7 @@ class ISSM(nn.Module):
 					)
 			
 			mu_seq.append(mu_t)
-			S_seq.append(S_t)
+			S_seq.append(torch.abs(S_t))
 			log_p_seq.append(log_p)
 			deltas.append(delta)
 			total_loss += delta**2
@@ -153,6 +157,7 @@ class ISSM(nn.Module):
 		sigma_np = self.sigma.detach().numpy()
 		
 		v_filtered_mean = np.array([a_np[:, t].dot(mu_t.detach().numpy()) for t, mu_t in enumerate(mu_seq)]).reshape(T,)
+		
 		v_filtered_std = np.sqrt(np.array([a_np[:, t].dot(S_t.detach().numpy()).dot(a_np[:,t]) + np.square(sigma_np[t]) 
 										   for t, S_t in enumerate(S_seq)]).reshape((T,)))
 	
@@ -206,14 +211,26 @@ class ISSM(nn.Module):
 	def forward(self, horizon=12):
 		mu_seq, S_seq, nlls, deltas, total_loss = self.ISSM_filter(self.z, self.b, self.F, self.a, self.g, self.sigma, self.m_prior, self.S_prior)
 		#print(deltas)
-		#reconst_mean, reconst_std = self.reconstruct(mu_seq, S_seq)
-		#forecasts_mean, forecasts_std = self.forecast(mu_seq[-1],
-										  #S_seq[-1],
-										  #self.F, self.a, self.g, self.sigma, horizon=horizon)
-		#self.plot_reconstruction_forecasts(reconst_mean, reconst_std, forecasts_mean, forecasts_std)
+		# reconst_mean, reconst_std = self.reconstruct(mu_seq, S_seq)
+		# forecasts_mean, forecasts_std = self.forecast(mu_seq[-1],
+		# 								  S_seq[-1],
+		# 								  self.F, self.a, self.g, self.sigma, horizon=horizon)
+		# self.plot_reconstruction_forecasts(reconst_mean, reconst_std, forecasts_mean, forecasts_std)
 		#plt.plot(deltas)
 		#plt.show()
 		return total_loss
+
+	def generate(self, horizon=12):
+		mu_seq, S_seq, nlls, deltas, total_loss = self.ISSM_filter(self.z, self.b, self.F, self.a, self.g, self.sigma, self.m_prior, self.S_prior)
+		#print(deltas)
+		reconst_mean, reconst_std = self.reconstruct(mu_seq, S_seq)
+		forecasts_mean, forecasts_std = self.forecast(mu_seq[-1],
+										  S_seq[-1],
+										  self.F, self.a, self.g, self.sigma, horizon=horizon)
+		self.plot_reconstruction_forecasts(reconst_mean, reconst_std, forecasts_mean, forecasts_std)
+		autocorrelation_plot(deltas)
+		plt.show()
+
 
 
 
