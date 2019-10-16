@@ -8,7 +8,7 @@ from model import ISSM
 def load_args():
 
 	parser = argparse.ArgumentParser(description='params')
-	parser.add_argument('--model_type', default=1, type=int)
+	parser.add_argument('--model_type', default=3, type=int)
 	parser.add_argument('--horizon', default=8, type=int)
 	parser.add_argument('--epochs', default=50, type=int)
 

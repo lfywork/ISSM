@@ -42,25 +42,26 @@ class ISSM(nn.Module):
 
 		# monthly seasonal model with level/trend
 		elif self.model_type == 3:
-			self.latent_dim = 13
-			g_t = torch.tensor([0.5, 0.1, 0.1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])  # 13x1
-			self.g = g_t.repeat(self.T, 1).view(self.latent_dim, self.T)  # 13xT
-			F_t = torch.tensor([[1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-							[0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-							[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-							[0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-							[0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-							[0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
-							[0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
-							[0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
-							[0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-							[0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0],
-							[0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
-							[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
-							[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0]]).float()
-			self.F = F_t.view(self.latent_dim, self.latent_dim, 1).repeat(1, 1, self.T)  # 13x13xT
-			a_t = torch.tensor([1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]).float().view(self.latent_dim, 1)  # 13x1
-			self.a = a_t.repeat(1, self.T)  # 13xT
+			self.latent_dim = 14
+			g_t = torch.tensor([0.5, 0.1, 0.1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])  # 14x1
+			self.g = g_t.repeat(self.T, 1).view(self.latent_dim, self.T)  # 14xT
+			F_t = torch.tensor([[1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+				 [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+				 [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+				 [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+				 [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+				 [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+				 [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+				 [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+				 [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+				 [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
+				 [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0],
+				 [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+				 [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
+				 [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0]]).float()
+			self.F = F_t.view(self.latent_dim, self.latent_dim, 1).repeat(1, 1, self.T)  # 14x14xT
+			a_t = torch.tensor([1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]).float().view(self.latent_dim, 1)  # 14x1
+			self.a = a_t.repeat(1, self.T)  # 14xT
 
 
 		# priors for latent space vector
@@ -79,7 +80,7 @@ class ISSM(nn.Module):
 		self.g = torch.nn.Parameter(self.g)
 		self.m_prior = torch.nn.Parameter(self.m_prior)
 		self.S_prior = torch.nn.Parameter(self.S_prior)
-		self.b = torch.nn.Parameter(self.b)
+		#self.b = torch.nn.Parameter(self.b)
 
 	# filtering
 	# stolen from https://gluon.mxnet.io/chapter12_time-series/issm-scratch.html#Filtering
