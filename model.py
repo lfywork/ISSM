@@ -126,12 +126,23 @@ class ISSM(nn.Module):
 			kalman_gain = torch.div(sig_times_a, S_vv+1e-8)  # fifth eqn
 			#print(kalman_gain.shape)
 			
+			# ********************************
+			# THIS MIGHT NOT WORK RIGHT HERE
+			# (gamma / m) * sigma_t
+			if H > 2:
+				adjustment_t = (g[2][t] / 12) * sigma_t
+				mu_v[2:] = mu_v[2:] - adjustment_t
+				mu_v[0] = mu_v[0] + adjustment_t
+
+			# ********************************
+
 			# Prediction Error (delta)
 			delta = z[t] - b[t] - mu_v  # part of eqn 6
 			#print(delta.shape)
 			
 			# Filtered estimates
 			mu_t = mu_h + torch.matmul(kalman_gain, delta)  # sixth eqn
+
 			
 			# Joseph's symmetrized update for covariance
 			ImKa = eye_h - torch.matmul(kalman_gain, a_t.t())  # identity minus K*a

@@ -64,29 +64,31 @@ def train(args, issm):
 					# clamp alpha
 					param.data[0].clamp_(min=1e-5, max=0.999)
 					# clamp beta
-					param.data[1].clamp_(min=1e-5, max=0.999)
+					for j in range(len(param[0])):
+						param.data[1][j].clamp_(min=1e-5, max=param[0][j].detach().item())
 				if latent_dim > 2:
 					# clamp gamma
-					param.data[2].clamp_(min=1e-5, max=0.999)
+					for j in range(len(param[0])):
+						param.data[2][j].clamp_(min=1e-5, max=1-param[0][j].detach().item())
 					param.data[3:].clamp_(min=0., max=0.)
 			elif name == 'm_prior':
 				latent_dim = param.data.shape[0]
-				if latent_dim == 1:
-					# clamp level
-					param.data.clamp_(min=-2, max=2)
-				elif latent_dim >= 2:
-					# clamp level
-					param.data[0].clamp_(min=-2, max=2)
-					# clamp trend
-					param.data[1].clamp_(min=-2, max=2)
+				# if latent_dim == 1:
+				# 	# clamp level
+				# 	param.data.clamp_(min=-2, max=2)
+				# elif latent_dim >= 2:
+				# 	# clamp level
+				# 	param.data[0].clamp_(min=-2, max=2)
+				# 	# clamp trend
+				# 	param.data[1].clamp_(min=-2, max=2)
 				if latent_dim > 2:
 					# clamp seasonality
-					param.data[2:].clamp_(min=-2, max=2)
+					#param.data[2:].clamp_(min=-2, max=2)
 					param.data[2:] = param.data[2:] - torch.mean(param.data[2:])
 				#param.data.clamp_(min=-2, max=2)
 			elif name == 'S_prior':
 				param.data = param.data * torch.eye(param.data.shape[0])
-				param.data.clamp_(min=1e-5)
+				param.data.clamp_(min=1e-8)
 			elif name == 'b':
 				param.data.clamp_(min=-1, max=1)
 
