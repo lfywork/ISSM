@@ -4,6 +4,7 @@ import pandas as pd
 import argparse
 
 from model import ISSM
+from utils import plot_forecasts
 
 def load_args():
 
@@ -24,7 +25,7 @@ def get_data(loc="https://datahub.io/core/bond-yields-us-10y/r/monthly.csv", hea
 
 	return ts
 
-def get_elecequip():
+def get_elecequip(args):
 	elecequip = pd.read_csv('elec.csv')
 	elecequip = elecequip.iloc[:, 1]
 
@@ -33,12 +34,12 @@ def get_elecequip():
 	elecequip.name = 'elecequip'
 
 	# time-series
-	ts = elecequip.values[:-10]
+	ts = elecequip.values
 
 	# Normalize
 	ts = np.array((ts - np.mean(ts)) / np.std(ts), dtype=np.float)
 
-	return ts
+	return ts[:-args.horizon], ts
 
 def train(args, issm):
 	optim = torch.optim.Adam(issm.parameters(), lr=1e-2)
@@ -97,13 +98,14 @@ def train(args, issm):
 
 def main(args):
 	#y = get_data()
-	y = get_elecequip()
+	y, full_y = get_elecequip(args)
 	issm = ISSM(y, model_type=args.model_type)
 	train(args, issm)
 	with torch.no_grad():
 		#print(issm.m_prior)
 		#print(torch.sum(issm.m_prior))
-		issm.generate(horizon=args.horizon)
+		forecasts_mean, forecasts_std = issm.generate(horizon=args.horizon)
+		plot_forecasts(forecasts_mean, forecasts_std, y, full_y)
 	#issm.forward(horizon=args.horizon)
 
 

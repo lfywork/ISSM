@@ -28,14 +28,14 @@ class ISSM(nn.Module):
 			self.latent_dim = 1
 			self.F = torch.ones(1, 1, self.T)  # 1x1xT
 			self.a = torch.ones(1, self.T)     # 1xT
-			self.g = 0.5 * torch.ones(1, self.T)    # 1xT
+			self.g = 0.1 * torch.ones(1, self.T)    # 1xT
 
 		# level/trend model
 		elif self.model_type == 2:
 			self.latent_dim = 2
-			g_t = torch.tensor([0.5, 0.1])  # 2x1
+			g_t = torch.tensor([0.1, 0.01])  # 2x1
 			self.g = g_t.repeat(self.T, 1).view(self.latent_dim, self.T)  # 2xT
-			F_t = torch.tensor([1.0, 1.0, 0., 1.0]).view(self.latent_dim, self.latent_dim, 1) # 2x2x1 matrix here
+			F_t = torch.tensor([[1.0, 1.0], [0., 1.0]]).view(self.latent_dim, self.latent_dim, 1) # 2x2x1 matrix here
 			a_t = torch.tensor([1.0, 1.0]).view(self.latent_dim, 1)  # 2x1
 			self.F = F_t.repeat(1, 1, self.T) 						# 2x2xT
 			self.a = a_t.repeat(1, self.T) 							# 2xT
@@ -43,7 +43,7 @@ class ISSM(nn.Module):
 		# monthly seasonal model with level/trend
 		elif self.model_type == 3:
 			self.latent_dim = 14
-			g_t = torch.tensor([0.5, 0.1, 0.1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])  # 14x1
+			g_t = torch.tensor([0.1, 0.01, 0.01, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])  # 14x1
 			self.g = g_t.repeat(self.T, 1).view(self.latent_dim, self.T)  # 14xT
 			F_t = torch.tensor([[1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 				 [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -175,7 +175,9 @@ class ISSM(nn.Module):
 	
 		return v_filtered_mean, v_filtered_std
 
-	def forecast(self, mu_last_state, S_last_state, F, a, g, sigma, horizon):
+	# this only works after filtering
+	# generating from mu_prior, sigma_prior requires filtered=False
+	def forecast(self, mu_last_state, S_last_state, F, a, g, sigma, horizon, filtered=True):
 
 		forecasts_mean = []
 		forecasts_std = []
@@ -187,6 +189,11 @@ class ISSM(nn.Module):
 		g = g.detach().numpy()
 		sigma = sigma.detach().numpy()
 
+		if filtered:
+			mu_last_state = F[:, :, 0].dot(mu_last_state)  # transition to current time-step (not done in training)
+			S_last_state = F[:, :, 0].dot(S_last_state).dot(F[:, :, 0].T) # transition sigma also
+
+		# forecast over time horizon
 		for t in range(horizon):
 			a_t = a[:, t]
 			forecast_mean = a_t.dot(mu_last_state)[0]
@@ -195,8 +202,8 @@ class ISSM(nn.Module):
 			forecasts_mean.append(forecast_mean)
 			forecasts_std.append(forecast_std)
 
-			mu_last_state = F[:, :, t].dot(mu_last_state)
-			S_last_state = F[:, :, t].dot(S_last_state).dot(F[:, :, t].T)
+			mu_last_state = F[:, :, t].dot(mu_last_state)  # update mu
+			S_last_state = F[:, :, t].dot(S_last_state).dot(F[:, :, t].T)  # update sigma
 
 		return np.array(forecasts_mean), np.array(forecasts_std)
 
@@ -242,6 +249,8 @@ class ISSM(nn.Module):
 		self.plot_reconstruction_forecasts(reconst_mean, reconst_std, forecasts_mean, forecasts_std)
 		autocorrelation_plot(deltas)
 		plt.show()
+
+		return forecasts_mean, forecasts_std
 
 
 
