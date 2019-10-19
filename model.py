@@ -153,8 +153,7 @@ class ISSM(nn.Module):
 					+ torch.mul(torch.matmul(kalman_gain, kalman_gain.t()), sigma.pow(2)) # seventh eqn
 			
 			# log likelihood
-			log_p = (-0.5 * (delta*delta / (S_vv + 1e-8)
-							 + np.log(2.0*np.pi)
+			log_p = ((delta*delta / (S_vv + 1e-8)
 							 + torch.log(S_vv + 1e-8))
 					)
 			
@@ -169,7 +168,8 @@ class ISSM(nn.Module):
 			sigma_est += (delta**2)/stand_v
 			total_loss += torch.log((delta**2)/stand_v)
 		self.sigma = (1/T) * sigma_est.detach()
-		return mu_seq, S_seq, log_p_seq, deltas, total_loss + (1/T) * running_stand
+		nll_total = torch.sum(log_p) + (T*np.log(2*np.pi))
+		return mu_seq, S_seq, log_p_seq, deltas, nll_total #total_loss + (1/T) * running_stand
 
 	def reconstruct(self, mu_seq, S_seq):
 		a_np = self.a.numpy()
