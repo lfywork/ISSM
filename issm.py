@@ -42,7 +42,7 @@ def get_elecequip(args):
 	return ts[:-args.horizon], ts
 
 def train(args, issm):
-	optim = torch.optim.Adam(issm.parameters(), lr=1e-2)
+	optim = torch.optim.Adam(issm.parameters(), lr=5e-2)
 
 	for i in range(args.epochs):
 		#def closure():

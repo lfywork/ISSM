@@ -73,10 +73,11 @@ class ISSM(nn.Module):
 		# sigma_t
 		# b_t
 		# z_t
-		self.sigma = 0.5 * torch.ones(self.T, 1).float()
+		#self.sigma = 0.5 * torch.ones(self.T, 1).float()
+		self.sigma = torch.tensor(1.)
 		self.b = torch.zeros(self.T, 1).float()
 
-		self.sigma = torch.nn.Parameter(self.sigma)
+		#self.sigma = torch.nn.Parameter(self.sigma)
 		self.g = torch.nn.Parameter(self.g)
 		self.m_prior = torch.nn.Parameter(self.m_prior)
 		self.S_prior = torch.nn.Parameter(self.S_prior)
@@ -96,7 +97,9 @@ class ISSM(nn.Module):
 		S_seq = []
 		log_p_seq = []
 		deltas = []
+		running_stand = 0
 		total_loss = 0
+		sigma_est = 0
 		for t in range(T):
 			if t == 0:
 				# At first time step, use mu_0, S_0 (prior)
@@ -121,8 +124,8 @@ class ISSM(nn.Module):
 			# Compute Kalman gain (vector)
 			sig_times_a = torch.matmul(S_hh, a_t)  # part of eqn 4 and 5
 			
-			sigma_t = sigma[t]
-			S_vv = torch.matmul(a_t.t(), sig_times_a) + sigma_t.pow(2)  # fourth eqn
+			#sigma_t = sigma[t]
+			S_vv = torch.matmul(a_t.t(), sig_times_a) + sigma.pow(2)  # fourth eqn
 			kalman_gain = torch.div(sig_times_a, S_vv+1e-8)  # fifth eqn
 			#print(kalman_gain.shape)
 			
@@ -130,7 +133,7 @@ class ISSM(nn.Module):
 			# THIS MIGHT NOT WORK RIGHT HERE
 			# (gamma / m) * sigma_t
 			if H > 2:
-				adjustment_t = (g[2][t] / 12) * sigma_t
+				adjustment_t = (g[2][t] / 12) * sigma
 				mu_v[2:] = mu_v[2:] - adjustment_t
 				mu_v[0] = mu_v[0] + adjustment_t
 
@@ -147,7 +150,7 @@ class ISSM(nn.Module):
 			# Joseph's symmetrized update for covariance
 			ImKa = eye_h - torch.matmul(kalman_gain, a_t.t())  # identity minus K*a
 			S_t = torch.matmul(torch.matmul(ImKa, S_hh), ImKa.t()) \
-					+ torch.mul(torch.matmul(kalman_gain, kalman_gain.t()), sigma_t.pow(2)) # seventh eqn
+					+ torch.mul(torch.matmul(kalman_gain, kalman_gain.t()), sigma.pow(2)) # seventh eqn
 			
 			# log likelihood
 			log_p = (-0.5 * (delta*delta / (S_vv + 1e-8)
@@ -155,13 +158,18 @@ class ISSM(nn.Module):
 							 + torch.log(S_vv + 1e-8))
 					)
 			
+			# standardized variance
+			stand_v = S_vv / sigma
+
 			mu_seq.append(mu_t)
 			S_seq.append(torch.abs(S_t))
 			log_p_seq.append(log_p)
 			deltas.append(delta)
-			total_loss += delta**2
-			
-		return mu_seq, S_seq, log_p_seq, deltas, total_loss
+			running_stand = running_stand + torch.log(stand_v)
+			sigma_est += (delta**2)/stand_v
+			total_loss += torch.log((delta**2)/stand_v)
+		self.sigma = (1/T) * sigma_est.detach()
+		return mu_seq, S_seq, log_p_seq, deltas, total_loss + (1/T) * running_stand
 
 	def reconstruct(self, mu_seq, S_seq):
 		a_np = self.a.numpy()
@@ -170,9 +178,10 @@ class ISSM(nn.Module):
 		
 		v_filtered_mean = np.array([a_np[:, t].dot(mu_t.detach().numpy()) for t, mu_t in enumerate(mu_seq)]).reshape(T,)
 		
-		v_filtered_std = np.sqrt(np.array([a_np[:, t].dot(S_t.detach().numpy()).dot(a_np[:,t]) + np.square(sigma_np[t]) 
+		v_filtered_std = np.sqrt(np.array([a_np[:, t].dot(S_t.detach().numpy()).dot(a_np[:,t]) + np.square(sigma_np) 
 										   for t, S_t in enumerate(S_seq)]).reshape((T,)))
-	
+		
+
 		return v_filtered_mean, v_filtered_std
 
 	# this only works after filtering
@@ -197,15 +206,15 @@ class ISSM(nn.Module):
 		for t in range(horizon):
 			a_t = a[:, t]
 			forecast_mean = a_t.dot(mu_last_state)[0]
-			forecast_std = a_t.dot(S_last_state).dot(a_t) + np.square(sigma[t])[0]
-
+			#forecast_std = a_t.dot(S_last_state).dot(a_t) + np.square(sigma[t])[0]
+			forecast_std = a_t.dot(S_last_state).dot(a_t) + np.square(sigma)
 			forecasts_mean.append(forecast_mean)
 			forecasts_std.append(forecast_std)
 
 			mu_last_state = F[:, :, t].dot(mu_last_state)  # update mu
 			S_last_state = F[:, :, t].dot(S_last_state).dot(F[:, :, t].T)  # update sigma
 
-		return np.array(forecasts_mean), np.array(forecasts_std)
+		return np.array(forecasts_mean), np.array(forecasts_std).squeeze()
 
 
 	def plot_reconstruction_forecasts(self, v_filtered_mean, v_filtered_std, forecasts_mean, forecasts_std):
@@ -219,6 +228,7 @@ class ISSM(nn.Module):
 						 facecolor="blue", alpha=0.2)
 
 		plt.plot(np.arange(T, T+len(forecasts_mean)), forecasts_mean, color="g")
+		#print(forecasts_mean.shape, forecasts_std.shape)
 		plt.fill_between(np.arange(T, T+len(forecasts_mean)), forecasts_mean-forecasts_std,
 						 forecasts_mean+forecasts_std,
 						 facecolor="green", alpha=0.2)
